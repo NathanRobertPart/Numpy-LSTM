@@ -57,30 +57,55 @@ class lstm_layer(object):
 class passes():
 
     @staticmethod
-    def forward_pass(x,h_prev,Ct_prev,neuron,final):
+    def forward_pass(timeStepModel,t,x,h_prev,ct_prev,neuron,final):
         z = np.row_stack((h_prev, x))
-        ht, ot, z, ft, it, ct_new, ct = neuron.cell_state(z, Ct_prev)
+        ht, ot, z, ft, it, ct_new, ct = neuron.cell_state(z, ct_prev)
         if final:
             y,vt = neuron.final_output(ht)
         else:
             y,vt = 0,0
-        return y, vt, ht, ot, z, ft, it, ct_new, ct
+
+        timeStepModel.y_s[t] = y
+        timeStepModel.zt_s[t] = z
+        timeStepModel.ht_s[t] = ht
+        timeStepModel.ot_s[t] = ot
+        timeStepModel.ft_s[t] = ft
+        timeStepModel.it_s[t] = it
+        timeStepModel.ct_new_s[t] = ct_new
+        timeStepModel.ct_s[t] = ct
+
+        return timeStepModel
 
     @staticmethod
-    def backward_pass(y_true,dh_next,dct_next,ct_prev,y,vt,ht,ot,z,ft,it,ct_new, ct,neuron,final,h_size):
+    def backward_pass(timeStepModel,t,y_true,dh_next,dct_next,neuron,final,h_size):
 
-        dv = np.copy(y)
-        dv = [dv[a] - 1 for a in y_true]
+        ht = timeStepModel.ht_s[t]
+        y = timeStepModel.y_s[t]
+        ot = timeStepModel.ot_s[t]
+        it = timeStepModel.it_s[t]
+        z = timeStepModel.zt_s[t]
+        ct = timeStepModel.ct_s[t]
+        ct_new = timeStepModel.ct_new_s[t]
+        ct_prev = timeStepModel.ct_s[t-1]
+        ft = timeStepModel.ft_s[t]
 
-        if final:
-            neuron.final_weight.grad += np.dot(dv, ht)
-            neuron.final_bias.grad += dv
-
+        neuron,dv = gc.softmaxPropogation(neuron,ht,y_true,y,final)
         neuron,dh,do = gc.outputPropogation(neuron, dv, dh_next, ot, z, ct)
         neuron,dct,dct_new = gc.cellPropogation(neuron, dct_next, dh, ot, it, ct, ct_new, z)
         neuron,dit = gc.inputPropogation(neuron, dct, ct_new, it, z)
         neuron,df = gc.forgetPropogation(neuron,dct,ct_prev,ft,z)
         dz, dh_prev, dct_prev = gc.aggregation(neuron, df, dit, dct_new, do, h_size, ft, dct)
-        return [dh_prev,dct_prev]
+        return [timeStepModel,dh_prev,dct_prev]
 
 
+    @staticmethod
+    def reset_grad(lstm_layer):
+        for item in lstm_layer.all():
+            item.grad.fill(0)
+        return lstm_layer
+
+    @staticmethod
+    def clip_grad(lstm_layer):
+        for item in lstm_layer.all():
+            np.clip(item.grad, -1, 1, out=item.grad)
+        return lstm_layer

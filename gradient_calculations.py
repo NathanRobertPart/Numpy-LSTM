@@ -1,6 +1,14 @@
 import numpy as np
 import activation_functions as af
 
+def softmaxPropogation(neuron,ht,y_true,y,final):
+    dv = np.copy(y)
+    dv = [dv[a] - 1 for a in y_true]
+    if final:
+        neuron.final_weight.grad += np.dot(dv, ht)
+        neuron.final_bias.grad += dv
+    return neuron,dv
+
 def outputPropogation(neuron,dv,dh_next,ot,z,ct):
     dh = np.dot(neuron.final_weight.values.T, dv) + dh_next
     do = dh * af.tanh(ct) * af.dsigmoid(ot)
