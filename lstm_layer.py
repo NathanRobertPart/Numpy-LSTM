@@ -1,6 +1,6 @@
 import numpy as np
-from activation_functions import activation_functions as af
-from activation_functions import activation_function_derivations as df
+import activation_functions as af
+import gradient_calculations as gc
 
 class matrixModel(object):
 
@@ -54,7 +54,6 @@ class lstm_layer(object):
         return y,vt
 
 
-
 class passes():
 
     @staticmethod
@@ -68,7 +67,7 @@ class passes():
         return y, vt, ht, ot, z, ft, it, ct_new, ct
 
     @staticmethod
-    def backward_pass(y_true,dh_next,dC_next,Ct_prev,y,vt,ht,ot,z,ft,it,neuron,final):
+    def backward_pass(y_true,dh_next,dct_next,ct_prev,y,vt,ht,ot,z,ft,it,ct_new, ct,neuron,final,h_size):
 
         dv = np.copy(y)
         dv = [dv[a] - 1 for a in y_true]
@@ -77,5 +76,11 @@ class passes():
             neuron.final_weight.grad += np.dot(dv, ht)
             neuron.final_bias.grad += dv
 
-        dh = np.dot(neuron.final_weight.values.T, dv)
+        neuron,dh,do = gc.outputPropogation(neuron, dv, dh_next, ot, z, ct)
+        neuron,dct,dct_new = gc.cellPropogation(neuron, dct_next, dh, ot, it, ct, ct_new, z)
+        neuron,dit = gc.inputPropogation(neuron, dct, ct_new, it, z)
+        neuron,df = gc.forgetPropogation(neuron,dct,ct_prev,ft,z)
+        dz, dh_prev, dct_prev = gc.aggregation(neuron, df, dit, dct_new, do, h_size, ft, dct)
+        return [dh_prev,dct_prev]
+
 
